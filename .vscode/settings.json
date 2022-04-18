@@ -26,5 +26,8 @@
     "python.formatting.provider": "yapf",
     "[json]": {
 	    "editor.formatOnSave": false
-    }
+    },
+    "cortex-debug.armToolchainPath": "/home/patrick/Applications/gcc-arm-none-eabi-10.3-2021.10/bin",
+    "cortex-debug.gdbPath": "/home/patrick/Applications/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-gdb",
+    "cortex-debug.stutilPath": "/usr/bin/st-util"
 }

@@ -1,0 +1,15 @@
+{
+    "configurations": [
+        {
+            "name": "ST-Link Debug",
+            "cwd": "${workspaceRoot}",
+            "executable": "./.build/uniform_default.elf",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "openocd",
+            "configFiles": ["interface/stlink.cfg", "target/stm32l0.cfg"],
+            "preLaunchCommands": ["make uniform:default"],
+            "showDevDebugOutput": "raw"
+        }
+    ]
+}

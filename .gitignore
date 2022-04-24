@@ -64,6 +64,7 @@ CMakeLists.txt
 .vscode/last.sql
 .vscode/tasks.json
 .vscode/temp.sql
+.vscode/.cortex*
 tags
 
 # Ignore image files

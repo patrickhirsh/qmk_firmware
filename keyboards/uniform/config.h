@@ -14,32 +14,12 @@
 #define PRODUCT Uniform Keyboard
 #define DESCRIPTION Uniform Keyboard
 
-// Disable EEPROM
-//#define STM32_ONBOARD_EEPROM_SIZE (6 * 1024)
-//#define DYNAMIC_KEYMAP_MACRO_EEPROM_SIZE (STM32_ONBOARD_EEPROM_SIZE - DYNAMIC_KEYMAP_MACRO_EEPROM_ADDR)
-
 /* key matrix size */
 #define MATRIX_ROWS 5
 #define MATRIX_COLS 14
 
 /* Set 0 if debouncing isn't needed */
 #define DEBOUNCE 5
-
-/*
- * Feature disable options
- *  These options are also useful to firmware size reduction.
- */
-
-/* disable debug print */
-//#define NO_DEBUG
-
-/* disable print */
-//#define NO_PRINT
-
-/* disable action features */
-//#define NO_ACTION_LAYER
-//#define NO_ACTION_TAPPING
-//#define NO_ACTION_ONESHOT
 
 /* ChibiOS hooks to reroute errors to QMK toolbox */
 #define chDbgCheck(c)                                                                                   \

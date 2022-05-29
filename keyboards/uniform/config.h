@@ -14,9 +14,16 @@
 #define PRODUCT Uniform Keyboard
 #define DESCRIPTION Uniform Keyboard
 
-/* key matrix size */
+/* key matrix */
+#define DIODE_DIRECTION COL2ROW
 #define MATRIX_ROWS 5
 #define MATRIX_COLS 14
+#define MATRIX_ROW_PINS { B4, B5, B7, C15, C14 }
+#define MATRIX_COL_PINS { A0, A1, A2, A3, A4, A5, A6, A7, B0, B1, A8, A9, A10, B6 }
+
+/* Status RGB LED */
+#define RGB_DI_PIN A15
+#define RGBLED_NUM 1
 
 /* Set 0 if debouncing isn't needed */
 #define DEBOUNCE 5

@@ -22,3 +22,21 @@
 // clang-format on
 
 void exec_bootloader(void);
+
+// Status LED state information
+void uniform_increment_status_led_mode(void);
+void uniform_decrement_status_led_mode(void);
+void uniform_flip_mod_state_caps(void);
+void uniform_set_mod_state_fn1(bool state);
+void uniform_set_mod_state_fn2(bool state);
+
+// Status LEDs Tick
+uint32_t uniform_tick_status_leds(uint32_t trigger_time, void* cb_arg);
+void uniform_update_status_leds(void);
+uint8_t uniform_status_leds_brightness_post_processing(uint8_t val);
+
+// Status LEDs (Modes)
+void uniform_init_status_leds_sorbet(void);
+void uniform_update_status_leds_sorbet(void);
+void uniform_init_status_leds_rainbow(void);
+void uniform_update_status_leds_rainbow(void);

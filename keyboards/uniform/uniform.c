@@ -13,6 +13,7 @@
 #include "math.h"
 
 
+
 // ======================================================================
 // Status LEDs (State Info)
 // ======================================================================
@@ -31,6 +32,7 @@ static bool uniform_mod_state_fn1;
 static bool uniform_mod_state_fn2;
 
 
+
 // ======================================================================
 // Status LEDs (Modes)
 // ======================================================================
@@ -39,6 +41,7 @@ typedef struct {
     void(*init)(void);
     void(*update)(void);
 } uniform_status_led_mode;
+
 
 // master array of status led modes
 static uint8_t uniform_status_leds_mode_index;
@@ -49,20 +52,22 @@ static uniform_status_led_mode uniform_status_led_modes[] = {
 };
 
 
+
 // ======================================================================
 // Mode: Sorbet
 // ======================================================================
 
-static const float sorbet_trace_falloff_scalar = 1.5f;      // distance the light of the trace will reach
-static const float sorbet_trace_speed = 35;                 // sin input (ticks) is scaled by this value to determine position (smaller value = faster)
-static const uint8_t sorbet_trace_fade_time = 50;           // tick count for trace strength to fade in and out
-static const uint8_t sorbet_trace_rest_pos = 70;            // should be a value between 0 and 2 * M_PI * sorbet_trace_speed (period of oscillation). trace will start here
-static const float sorbet_led0_pos = -0.5;                  // led position relative to the center of the LED cluster
-static const float sorbet_led1_pos = 0;                     // led position relative to the center of the LED cluster
-static const float sorbet_led2_pos = 0.5;                   // led position relative to the center of the LED cluster
+static const float      sorbet_trace_falloff_scalar = 1.5f;     // distance the light spreads from the trace point
+static const float      sorbet_trace_speed = 35;                // sin input (ticks) is scaled by this value to determine position (smaller value = faster)
+static const uint8_t    sorbet_trace_fade_time = 50;            // time (in ticks) to fade in / out of the effect
+static const uint8_t    sorbet_trace_rest_pos = 70;             // should be a value between 0 and 2 * M_PI * sorbet_trace_speed (period of oscillation). trace will start here
+static const float      sorbet_led0_pos = -0.5;                 // led position relative to the center of the LED cluster
+static const float      sorbet_led1_pos = 0;                    // led position relative to the center of the LED cluster
+static const float      sorbet_led2_pos = 0.5;                  // led position relative to the center of the LED cluster
 
-static uint16_t sorbet_trace_pos;
-static uint8_t sorbet_trace_str;
+static uint16_t         sorbet_trace_pos;
+static uint8_t          sorbet_trace_str;
+
 
 void uniform_init_status_leds_sorbet(void) {
     sorbet_trace_pos = sorbet_trace_rest_pos;
@@ -70,6 +75,7 @@ void uniform_init_status_leds_sorbet(void) {
     status_leds[1] = (uniform_status_led_color) { 15, 255, 255 };
     status_leds[2] = (uniform_status_led_color) { 5, 255, 255 };
 }
+
 
 void uniform_update_status_leds_sorbet(void) { 
 
@@ -118,6 +124,7 @@ void uniform_update_status_leds_sorbet(void) {
 }
 
 
+
 // ======================================================================
 // Mode: Rainbow
 // ======================================================================
@@ -128,11 +135,13 @@ void uniform_init_status_leds_rainbow(void) {
     status_leds[2] = (uniform_status_led_color) { 40, 255, 255 };
 }
 
+
 void uniform_update_status_leds_rainbow(void) { 
     status_leds[0] = (uniform_status_led_color) { status_leds[0].hue + 1, 255, 255 };
     status_leds[1] = (uniform_status_led_color) { status_leds[1].hue + 1, 255, 255 };
     status_leds[2] = (uniform_status_led_color) { status_leds[2].hue + 1, 255, 255 };
 }
+
 
 
 // ======================================================================
@@ -145,64 +154,73 @@ uint32_t uniform_tick_status_leds(uint32_t trigger_time, void* cb_arg) {
     return UNIFORM_STATUS_LED_TICKRATE;
 }
 
+
 // actual status led update function
 void uniform_update_status_leds(void) {
     uniform_status_led_modes[uniform_status_leds_mode_index].update();
     for (int i = 0; i < RGBLED_NUM; i++) {
         rgblight_sethsv_at(
-            status_leds[i].hue, 
-            status_leds[i].sat, 
-            uniform_status_leds_brightness_post_processing(status_leds[i].val), 
+            uniform_status_led_post_process_hue(status_leds[i].hue), 
+            uniform_status_led_post_process_sat(status_leds[i].sat), 
+            uniform_status_led_post_process_val(status_leds[i].val), 
             i);
     }
 }
 
-// status led brightness post processing
-const static uint8_t uniform_settings_layer_pulse_fade_time = 100;     // higher value = longer fade time when settings layer mod release
-const static float uniform_settings_layer_pulse_speed = 50.0f;         // lower value = faster pulse time
-const static uint16_t uniform_settings_layer_pulse_rest_pos = 60;      // should be a value between 0 and 2 * M_PI * uniform_settings_layer_pulse_speed (period of oscillation).
-static uint16_t uniform_settings_layer_pulse_pos = uniform_settings_layer_pulse_rest_pos;
-static uint8_t uniform_settings_layer_pulse_str = 0;
-uint8_t uniform_status_leds_brightness_post_processing(uint8_t val) {
 
-    // if we're in the settings layer or a settings layer pulse anim is still fading, update pulse anim
-    if (uniform_mod_state_fn2 || uniform_settings_layer_pulse_str != 0) {
+// apply final mode-independent effects to status led hue
+uint8_t uniform_status_led_post_process_hue(uint8_t hue) {
+    return hue;
+}
+
+
+// apply final mode-independent effects to status led sat
+uint8_t uniform_status_led_post_process_sat(uint8_t sat) {
+    return sat;
+}
+
+
+// apply final mode-independent effects to status led val
+uint8_t uniform_status_led_post_process_val(uint8_t val) {
+
+    // apply settings layer pulse effect
+    static uint16_t pulse_pos = 60;
+    static uint8_t pulse_str = 0;
+    if (uniform_mod_state_fn2 || pulse_str != 0) {
+        
+        const uint8_t fade_time = 50;       // time (in ticks) to fade in / out of the pulse effect
+        const float pulse_speed = 50.0f;    // lower value = faster pulse time
 
         // update pulse position
-        uniform_settings_layer_pulse_pos++;
-        if ((float)uniform_settings_layer_pulse_pos / uniform_settings_layer_pulse_speed > 2 * M_PI) {
-            uniform_settings_layer_pulse_pos = 0;
+        pulse_pos++;
+        if ((float)pulse_pos / pulse_speed > 2 * M_PI) {
+            pulse_pos = 0;
         }
-        float settings_pulse_sin_pos = sin((float)uniform_settings_layer_pulse_pos / uniform_settings_layer_pulse_speed);
+        float settings_pulse_sin_pos = sin((float)pulse_pos / pulse_speed);
 
-        // update pulse strength based on settings layer mod key state
-        if (uniform_settings_layer_pulse_str < uniform_settings_layer_pulse_fade_time && uniform_mod_state_fn2) {
-            // key down, not at max... increase
-            uniform_settings_layer_pulse_str++;
+        // update pulse strength
+        if (pulse_str < fade_time && uniform_mod_state_fn2) {
+            pulse_str++;
         } 
-        if (!uniform_mod_state_fn2 && uniform_settings_layer_pulse_str != 0) {
-            // key up, not at min... decrease
-            uniform_settings_layer_pulse_str--;
-
-            // bring pulse back to rest if it completely dies out
-            if (uniform_settings_layer_pulse_str == 0) {
-                uniform_settings_layer_pulse_pos = uniform_settings_layer_pulse_rest_pos;
+        if (!uniform_mod_state_fn2 && pulse_str != 0) {
+            pulse_str--;
+            if (pulse_str == 0) {
+                // bring pulse back to rest if it completely dies out
+                pulse_pos = 60;
             }
         }
 
-        // linearly interpolate between base val and the val with pulse applied based on uniform_settings_layer_pulse_str
-        return (((float)(uniform_settings_layer_pulse_fade_time - uniform_settings_layer_pulse_str) / (float)uniform_settings_layer_pulse_fade_time) * (float)(val) + 
-                ((float)(uniform_settings_layer_pulse_str) / (float)uniform_settings_layer_pulse_fade_time) * ((float)val * ((settings_pulse_sin_pos + 1.0f) / 2.0f))) *
-                uniform_status_led_brightness;
+        // linearly interpolate to smooth out pulse effect transition
+        val = ((float)(fade_time - pulse_str) / (float)fade_time) * (float)(val) +                                  // base val contribution
+              ((float)(pulse_str) / (float)fade_time) * ((float)val * ((settings_pulse_sin_pos + 1.0f) / 2.0f));    // pulse-applied val contribution
     }
 
-    // default case - apply brightness post-processing
+    // apply final brightness post-processing
     return (float)val * uniform_status_led_brightness;
 }
 
-void uniform_status_leds_pulse
 
-void uniform_increment_status_led_mode(void) {
+void uniform_increment_status_leds_mode(void) {
     uniform_status_leds_mode_index++;
     if (uniform_status_leds_mode_index == uniform_status_leds_mode_count) {
         uniform_status_leds_mode_index = 0;
@@ -214,7 +232,8 @@ void uniform_increment_status_led_mode(void) {
     eeconfig_update_kb(uniform_status_leds_mode_index);
 }
 
-void uniform_decrement_status_led_mode(void) {
+
+void uniform_decrement_status_leds_mode(void) {
     if (uniform_status_leds_mode_index == 0) {
         uniform_status_leds_mode_index = uniform_status_leds_mode_count - 1;
     } 
@@ -228,17 +247,21 @@ void uniform_decrement_status_led_mode(void) {
     eeconfig_update_kb(uniform_status_leds_mode_index);
 }
 
+
 void uniform_flip_mod_state_caps(void) {
     uniform_mod_state_caps = !uniform_mod_state_caps;
 } 
+
 
 void uniform_set_mod_state_fn1(bool state) {
     uniform_mod_state_fn1 = state;
 } 
 
+
 void uniform_set_mod_state_fn2(bool state) {
     uniform_mod_state_fn2 = state;
 } 
+
 
 
 // ======================================================================
@@ -265,5 +288,7 @@ void matrix_init_kb(void) {
     defer_exec(1, uniform_tick_status_leds, NULL);
 }
 
+
 void housekeeping_task_kb(void) {
+
 }

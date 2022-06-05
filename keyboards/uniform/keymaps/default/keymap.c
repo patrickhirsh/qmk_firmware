@@ -92,14 +92,14 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
       case KCU_MDEC:
         if (!record->event.pressed) {
-          uniform_decrement_status_led_mode();
+          uniform_decrement_status_leds_mode();
         } 
         return false;
         break;
-        
+
       case KCU_MINC:
         if (!record->event.pressed) {
-          uniform_increment_status_led_mode();
+          uniform_increment_status_leds_mode();
         } 
         return false;
         break;

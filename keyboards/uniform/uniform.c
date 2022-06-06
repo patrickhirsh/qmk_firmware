@@ -43,6 +43,7 @@ static uint8_t uniform_eeprom_read_status_led_mode(void) {
 }
 
 static void uniform_eeprom_write_status_led_brightness(uint8_t brightness) {
+
     // unpack    
     uint32_t eeprom = eeconfig_read_kb();
     uint8_t unpacked_mode =             (eeprom >> 0) & 0xFF;
@@ -62,6 +63,7 @@ static void uniform_eeprom_write_status_led_brightness(uint8_t brightness) {
 static uint8_t uniform_eeprom_read_status_led_brightness(void) {
     return (eeconfig_read_kb() >> 8) & 0xFF;
 }
+
 
 // ======================================================================
 // Status LEDs (State Info)
@@ -100,6 +102,42 @@ static uint8_t uniform_status_leds_mode_index;
 
 
 // ======================================================================
+// Effect Utilities
+// ======================================================================
+
+// linearly interpolate between val1 and val2 based on strength (distance into interpolation)
+uint8_t uniform_linear_interp(
+    uint8_t val1,               // value we're transitioning from
+    uint8_t val2,               // value we're transitioning to
+    uint8_t strength,           // how far into the shift between val1 and val2 are we? (out of max_strength)
+    uint8_t max_strength)       // when strength is at this value, we are entirely weighted on val2
+{
+    return ((float)(max_strength - strength) / (float)max_strength) * (float)val1 +        // val1 contribution
+           ((float)(strength) / (float)max_strength) * (float)val2;                        // val2 contribution
+}
+
+// sinusoidally interpolate between val1 and val2 based on strength (distance into interpolation)
+uint8_t uniform_sinusoidal_interpolation(
+    uint8_t val1,               // value we're transitioning from
+    uint8_t val2,               // value we're transitioning to
+    uint8_t strength,           // how far into the shift between val1 and val2 are we? (out of max_strength)
+    uint8_t max_strength)       // when strength is at this value, we are entirely weighted on val2
+{
+    // convert strength / max_strength ratio to fit the half-period of sin
+    float x_raw = ((float)strength / (float)max_strength) * M_PI;
+
+    // shift left by a quarter-period to get a segment that shifts from -1.0 to 1.0
+    float x_shifted = x_raw - (0.5f * M_PI);
+
+    // convert resulting value from -1.0:1.0 to 0.0:1.0
+    float sinusoidal_progress = (sin(x_shifted) + 1.0f) / 2.0f;
+
+    return (1.0f - sinusoidal_progress) * (float)val1 +        // val1 contribution
+           sinusoidal_progress * (float)val2;                  // val2 contribution
+}
+
+
+// ======================================================================
 // Mode: Sorbet
 // ======================================================================
 
@@ -110,18 +148,50 @@ static const uint8_t    sorbet_trace_rest_pos = 75;             // should be a v
 static const float      sorbet_led0_pos = -0.5;                 // led position relative to the center of the LED cluster
 static const float      sorbet_led1_pos = 0;                    // led position relative to the center of the LED cluster
 static const float      sorbet_led2_pos = 0.5;                  // led position relative to the center of the LED cluster
+static const uint8_t    sorbet_led0_hue = 235;                  // led0 base hue
+static const uint8_t    sorbet_led1_hue = 15;                   // led1 base hue
+static const uint8_t    sorbet_led2_hue = 5;                    // led2 base hue
+static const int        sorbet_led0_hue_shifted = 170;          // led0 hue shifted
+static const int        sorbet_led1_hue_shifted = 115;          // led1 hue shifted
+static const int        sorbet_led2_hue_shifted = 85;           // led2 hue shifted
+static const uint8_t    sorbet_hue_shift_transition_time = 70;  // time (in ticks) to fade in / out of the effect
 
 static uint16_t         sorbet_trace_pos;
 static uint8_t          sorbet_trace_str;
+static uint8_t          sorbet_hue_shift_str;
 
 void uniform_init_status_leds_sorbet(void) {
     sorbet_trace_pos = sorbet_trace_rest_pos;
-    status_leds[0] = (uniform_status_led_color) { 220, 255, 255 };
-    status_leds[1] = (uniform_status_led_color) { 15, 255, 255 };
-    status_leds[2] = (uniform_status_led_color) { 5, 255, 255 };
+    status_leds[0] = (uniform_status_led_color) { sorbet_led0_hue, 255, 255 };
+    status_leds[1] = (uniform_status_led_color) { sorbet_led1_hue, 255, 255 };
+    status_leds[2] = (uniform_status_led_color) { sorbet_led2_hue, 255, 255 };
 }
 
 void uniform_update_status_leds_sorbet(void) { 
+
+    // split space fn1 hue shift effect
+    if (uniform_mod_state_fn1 || sorbet_hue_shift_str != 0) {
+        
+        // update hue shift strength based on mod key state
+        if (sorbet_hue_shift_str < sorbet_hue_shift_transition_time && uniform_mod_state_fn1) {
+            sorbet_hue_shift_str++;
+        } 
+        if (!uniform_mod_state_fn1 && sorbet_hue_shift_str != 0) {
+            sorbet_hue_shift_str--;
+        }
+
+        // apply hue shift
+        status_leds[0].hue = uniform_sinusoidal_interpolation(sorbet_led0_hue, sorbet_led0_hue_shifted, sorbet_hue_shift_str, sorbet_hue_shift_transition_time);
+        status_leds[1].hue = uniform_sinusoidal_interpolation(sorbet_led1_hue, sorbet_led1_hue_shifted, sorbet_hue_shift_str, sorbet_hue_shift_transition_time);
+        status_leds[2].hue = uniform_sinusoidal_interpolation(sorbet_led2_hue, sorbet_led2_hue_shifted, sorbet_hue_shift_str, sorbet_hue_shift_transition_time);
+    }
+
+    else {
+        // always reset hue when no shift is in place
+        status_leds[0].hue = sorbet_led0_hue;
+        status_leds[1].hue = sorbet_led1_hue;
+        status_leds[2].hue = sorbet_led2_hue;
+    }
 
     // caps lock trace effect
     if (uniform_mod_state_caps || sorbet_trace_str != 0) {
@@ -135,37 +205,31 @@ void uniform_update_status_leds_sorbet(void) {
         
         // update trace strength based on mod key state
         if (sorbet_trace_str < sorbet_trace_fade_time && uniform_mod_state_caps) {
-            // mod key down.. increase strength
             sorbet_trace_str++;
         } 
         if (!uniform_mod_state_caps && sorbet_trace_str != 0) {
-            // mod key up.. reduce strength
             sorbet_trace_str--;
-
             // if trace strength completely dies out, reset position
             if (sorbet_trace_str == 0) {
                 sorbet_trace_pos = sorbet_trace_rest_pos;
             }
         }
 
+        // led distance from trace (considering falloff)
         float led0_scaled_dist = sorbet_trace_falloff_scalar * fabs(sorbet_led0_pos - trace_pos);
         float led1_scaled_dist = sorbet_trace_falloff_scalar * fabs(sorbet_led1_pos - trace_pos);
         float led2_scaled_dist = sorbet_trace_falloff_scalar * fabs(sorbet_led2_pos - trace_pos);
 
+        // determine effect intensity scalar (0.0f-1.0f)
         float led0_scale = 1.0f - led0_scaled_dist < 0 ? 0 : 1.0f - led0_scaled_dist;
         float led1_scale = 1.0f - led1_scaled_dist < 0 ? 0 : 1.0f - led1_scaled_dist;
         float led2_scale = 1.0f - led2_scaled_dist < 0 ? 0 : 1.0f - led2_scaled_dist;
 
-        status_leds[0] = (uniform_status_led_color) { status_leds[0].hue, 255 - (sorbet_trace_str / (float)sorbet_trace_fade_time) * 255.0f * led0_scale, status_leds[0].val };
-        status_leds[1] = (uniform_status_led_color) { status_leds[1].hue, 255 - (sorbet_trace_str / (float)sorbet_trace_fade_time) * 255.0f * led1_scale, status_leds[1].val };
-        status_leds[2] = (uniform_status_led_color) { status_leds[2].hue, 255 - (sorbet_trace_str / (float)sorbet_trace_fade_time) * 255.0f * led2_scale, status_leds[2].val };
+        // apply resulting saturation values to create trace effect
+        status_leds[0].sat = 255 - (sorbet_trace_str / (float)sorbet_trace_fade_time) * 255.0f * led0_scale;
+        status_leds[1].sat = 255 - (sorbet_trace_str / (float)sorbet_trace_fade_time) * 255.0f * led1_scale;
+        status_leds[2].sat = 255 - (sorbet_trace_str / (float)sorbet_trace_fade_time) * 255.0f * led2_scale;
     } 
-
-    else {
-        status_leds[0] = (uniform_status_led_color) { 220, 255, 255 };
-        status_leds[1] = (uniform_status_led_color) { 15, 255, 255 };
-        status_leds[2] = (uniform_status_led_color) { 5, 255, 255 };
-    }
 }
 
 
@@ -222,12 +286,13 @@ uint8_t uniform_status_led_post_process_sat(uint8_t sat) {
 uint8_t uniform_status_led_post_process_val(uint8_t val) {
 
     // apply settings layer pulse effect
-    static uint16_t pulse_pos = 40;
+    const uint16_t rest_pos = 60;
+    static uint16_t pulse_pos = rest_pos;
     static uint8_t pulse_str = 0;
     if (uniform_mod_state_fn2 || pulse_str != 0) {
         
         const uint8_t fade_time = 50;       // time (in ticks) to fade in / out of the pulse effect
-        const float pulse_speed = 40.0f;    // lower value = faster pulse time
+        const float pulse_speed = 50.0f;    // lower value = faster pulse time
 
         // update pulse position
         pulse_pos++;
@@ -244,13 +309,13 @@ uint8_t uniform_status_led_post_process_val(uint8_t val) {
             pulse_str--;
             if (pulse_str == 0) {
                 // bring pulse back to rest if it completely dies out
-                pulse_pos = 60;
+                pulse_pos = rest_pos;
             }
         }
 
         // linearly interpolate to smooth out pulse effect transition
-        val = ((float)(fade_time - pulse_str) / (float)fade_time) * (float)(val) +                                  // base val contribution
-              ((float)(pulse_str) / (float)fade_time) * ((float)val * ((settings_pulse_sin_pos + 1.0f) / 2.0f));    // pulse-applied val contribution
+        val = ((float)(fade_time - pulse_str) / (float)fade_time) * (float)(val) +                                                          // base val contribution
+              ((float)(pulse_str) / (float)fade_time) * (((float)val * ((settings_pulse_sin_pos + 1.0f) / 4.0f)) + (float)val * 0.5f);      // pulse-applied val contribution
     }
 
     // apply final brightness post-processing
@@ -262,10 +327,8 @@ void uniform_increment_status_leds_mode(void) {
     if (uniform_status_leds_mode_index == uniform_status_leds_mode_count) {
         uniform_status_leds_mode_index = 0;
     }
-    // any time we change modes, always invoke the mode init function
+    // any time we change modes, always invoke the mode init function and update eeprom
     uniform_status_led_modes[uniform_status_leds_mode_index].init();
-
-    // update eeprom
     uniform_eeprom_write_status_led_mode(uniform_status_leds_mode_index);
 }
 
@@ -276,10 +339,8 @@ void uniform_decrement_status_leds_mode(void) {
     else {
         uniform_status_leds_mode_index--;
     }
-    // any time we change modes, always invoke the mode init function
+    // any time we change modes, always invoke the mode init function and update eeprom
     uniform_status_led_modes[uniform_status_leds_mode_index].init();
-
-    // update eeprom
     uniform_eeprom_write_status_led_mode(uniform_status_leds_mode_index);
 }
 

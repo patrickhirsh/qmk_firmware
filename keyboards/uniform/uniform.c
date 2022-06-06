@@ -84,29 +84,12 @@ static bool uniform_mod_state_fn2;
 
 
 // ======================================================================
-// Status LEDs (Modes)
-// ======================================================================
-
-typedef struct {
-    void(*init)(void);
-    void(*update)(void);
-} uniform_status_led_mode;
-
-// master array of status led modes
-static uniform_status_led_mode uniform_status_led_modes[] = {
-    (uniform_status_led_mode) { uniform_init_status_leds_sorbet, uniform_update_status_leds_sorbet },
-    (uniform_status_led_mode) { uniform_init_status_leds_rainbow, uniform_update_status_leds_rainbow }
-};
-static uint8_t uniform_status_leds_mode_count;
-static uint8_t uniform_status_leds_mode_index;
-
-
-// ======================================================================
 // Effect Utilities
 // ======================================================================
 
 // linearly interpolate between val1 and val2 based on strength (distance into interpolation)
-uint8_t uniform_linear_interp(
+/* COMMENTED OUT UNTIL USED
+static uint8_t uniform_linear_interp(
     uint8_t val1,               // value we're transitioning from
     uint8_t val2,               // value we're transitioning to
     uint8_t strength,           // how far into the shift between val1 and val2 are we? (out of max_strength)
@@ -115,9 +98,10 @@ uint8_t uniform_linear_interp(
     return ((float)(max_strength - strength) / (float)max_strength) * (float)val1 +        // val1 contribution
            ((float)(strength) / (float)max_strength) * (float)val2;                        // val2 contribution
 }
+*/
 
 // sinusoidally interpolate between val1 and val2 based on strength (distance into interpolation)
-uint8_t uniform_sinusoidal_interpolation(
+static uint8_t uniform_sinusoidal_interpolation(
     uint8_t val1,               // value we're transitioning from
     uint8_t val2,               // value we're transitioning to
     uint8_t strength,           // how far into the shift between val1 and val2 are we? (out of max_strength)
@@ -141,6 +125,7 @@ uint8_t uniform_sinusoidal_interpolation(
 // Mode: Sorbet
 // ======================================================================
 
+// trace effect
 static const float      sorbet_trace_falloff_scalar = 1.5f;     // distance the light spreads from the trace point
 static const float      sorbet_trace_speed = 35;                // sin input (ticks) is scaled by this value to determine position (smaller value = faster)
 static const uint8_t    sorbet_trace_fade_time = 50;            // time (in ticks) to fade in / out of the effect
@@ -148,6 +133,10 @@ static const uint8_t    sorbet_trace_rest_pos = 75;             // should be a v
 static const float      sorbet_led0_pos = -0.5;                 // led position relative to the center of the LED cluster
 static const float      sorbet_led1_pos = 0;                    // led position relative to the center of the LED cluster
 static const float      sorbet_led2_pos = 0.5;                  // led position relative to the center of the LED cluster
+static uint16_t         sorbet_trace_pos;
+static uint8_t          sorbet_trace_str;
+
+// hue shift effect
 static const uint8_t    sorbet_led0_hue = 235;                  // led0 base hue
 static const uint8_t    sorbet_led1_hue = 15;                   // led1 base hue
 static const uint8_t    sorbet_led2_hue = 5;                    // led2 base hue
@@ -155,19 +144,17 @@ static const int        sorbet_led0_hue_shifted = 170;          // led0 hue shif
 static const int        sorbet_led1_hue_shifted = 115;          // led1 hue shifted
 static const int        sorbet_led2_hue_shifted = 85;           // led2 hue shifted
 static const uint8_t    sorbet_hue_shift_transition_time = 70;  // time (in ticks) to fade in / out of the effect
-
-static uint16_t         sorbet_trace_pos;
-static uint8_t          sorbet_trace_str;
 static uint8_t          sorbet_hue_shift_str;
 
-void uniform_init_status_leds_sorbet(void) {
+
+static void uniform_init_status_leds_sorbet(void) {         
     sorbet_trace_pos = sorbet_trace_rest_pos;
     status_leds[0] = (uniform_status_led_color) { sorbet_led0_hue, 255, 255 };
     status_leds[1] = (uniform_status_led_color) { sorbet_led1_hue, 255, 255 };
     status_leds[2] = (uniform_status_led_color) { sorbet_led2_hue, 255, 255 };
 }
 
-void uniform_update_status_leds_sorbet(void) { 
+static void uniform_update_status_leds_sorbet(void) { 
 
     // split space fn1 hue shift effect
     if (uniform_mod_state_fn1 || sorbet_hue_shift_str != 0) {
@@ -184,13 +171,6 @@ void uniform_update_status_leds_sorbet(void) {
         status_leds[0].hue = uniform_sinusoidal_interpolation(sorbet_led0_hue, sorbet_led0_hue_shifted, sorbet_hue_shift_str, sorbet_hue_shift_transition_time);
         status_leds[1].hue = uniform_sinusoidal_interpolation(sorbet_led1_hue, sorbet_led1_hue_shifted, sorbet_hue_shift_str, sorbet_hue_shift_transition_time);
         status_leds[2].hue = uniform_sinusoidal_interpolation(sorbet_led2_hue, sorbet_led2_hue_shifted, sorbet_hue_shift_str, sorbet_hue_shift_transition_time);
-    }
-
-    else {
-        // always reset hue when no shift is in place
-        status_leds[0].hue = sorbet_led0_hue;
-        status_leds[1].hue = sorbet_led1_hue;
-        status_leds[2].hue = sorbet_led2_hue;
     }
 
     // caps lock trace effect
@@ -229,7 +209,11 @@ void uniform_update_status_leds_sorbet(void) {
         status_leds[0].sat = 255 - (sorbet_trace_str / (float)sorbet_trace_fade_time) * 255.0f * led0_scale;
         status_leds[1].sat = 255 - (sorbet_trace_str / (float)sorbet_trace_fade_time) * 255.0f * led1_scale;
         status_leds[2].sat = 255 - (sorbet_trace_str / (float)sorbet_trace_fade_time) * 255.0f * led2_scale;
-    } 
+    }
+}
+
+static void uniform_sorbet_keypress_handle(uint16_t keycode, keyrecord_t *record) {
+    
 }
 
 
@@ -237,53 +221,58 @@ void uniform_update_status_leds_sorbet(void) {
 // Mode: Rainbow
 // ======================================================================
 
-void uniform_init_status_leds_rainbow(void) {
+static void uniform_init_status_leds_rainbow(void) {
     status_leds[0] = (uniform_status_led_color) { 0, 255, 255 };
     status_leds[1] = (uniform_status_led_color) { 20, 255, 255 };
     status_leds[2] = (uniform_status_led_color) { 40, 255, 255 };
 }
 
-void uniform_update_status_leds_rainbow(void) { 
+static void uniform_update_status_leds_rainbow(void) { 
     status_leds[0] = (uniform_status_led_color) { status_leds[0].hue + 1, 255, 255 };
     status_leds[1] = (uniform_status_led_color) { status_leds[1].hue + 1, 255, 255 };
     status_leds[2] = (uniform_status_led_color) { status_leds[2].hue + 1, 255, 255 };
 }
+
+static void uniform_rainbow_keypress_handle(uint16_t keycode, keyrecord_t *record) {
+
+}
+
+
+// ======================================================================
+// Status LEDs (Modes)
+// ======================================================================
+
+typedef struct {
+    void(*init)(void);                                          // always invoked once when a mode is set active
+    void(*update)(void);                                        // ticked once every UNIFORM_STATUS_LED_TICKRATE ticks
+    void(*key_event)(uint16_t keycode, keyrecord_t *record);    // invoked anytime a key event occurs
+} uniform_status_led_mode;
+
+// master array of status led modes
+static uniform_status_led_mode uniform_status_led_modes[] = {
+    (uniform_status_led_mode) { uniform_init_status_leds_sorbet, uniform_update_status_leds_sorbet, uniform_sorbet_keypress_handle },
+    (uniform_status_led_mode) { uniform_init_status_leds_rainbow, uniform_update_status_leds_rainbow, uniform_rainbow_keypress_handle }
+};
+static uint8_t uniform_status_leds_mode_count;
+static uint8_t uniform_status_leds_mode_index;
 
 
 // ======================================================================
 // Status LEDs
 // ======================================================================
 
-// deferred executor callback
-uint32_t uniform_tick_status_leds(uint32_t trigger_time, void* cb_arg) {
-    uniform_update_status_leds();
-    return UNIFORM_STATUS_LED_TICKRATE;
-}
-
-//status led update function
-void uniform_update_status_leds(void) {
-    uniform_status_led_modes[uniform_status_leds_mode_index].update();
-    for (int i = 0; i < RGBLED_NUM; i++) {
-        rgblight_sethsv_at(
-            uniform_status_led_post_process_hue(status_leds[i].hue), 
-            uniform_status_led_post_process_sat(status_leds[i].sat), 
-            uniform_status_led_post_process_val(status_leds[i].val), 
-            i);
-    }
-}
-
 // apply final mode-independent effects to status led hue
-uint8_t uniform_status_led_post_process_hue(uint8_t hue) {
+static uint8_t uniform_status_led_post_process_hue(uint8_t hue) {
     return hue;
 }
 
 // apply final mode-independent effects to status led sat
-uint8_t uniform_status_led_post_process_sat(uint8_t sat) {
+static uint8_t uniform_status_led_post_process_sat(uint8_t sat) {
     return sat;
 }
 
 // apply final mode-independent effects to status led val
-uint8_t uniform_status_led_post_process_val(uint8_t val) {
+static uint8_t uniform_status_led_post_process_val(uint8_t val) {
 
     // apply settings layer pulse effect
     const uint16_t rest_pos = 60;
@@ -320,6 +309,29 @@ uint8_t uniform_status_led_post_process_val(uint8_t val) {
 
     // apply final brightness post-processing
     return (float)val * ((float)uniform_status_led_brightness / 100.0f);
+}
+
+// deferred executor callback
+uint32_t uniform_tick_status_leds(uint32_t trigger_time, void* cb_arg) {
+    uniform_update_status_leds();
+    return UNIFORM_STATUS_LED_TICKRATE;
+}
+
+//status led update function
+void uniform_update_status_leds(void) {
+    uniform_status_led_modes[uniform_status_leds_mode_index].update();
+    for (int i = 0; i < RGBLED_NUM; i++) {
+        rgblight_sethsv_at(
+            uniform_status_led_post_process_hue(status_leds[i].hue), 
+            uniform_status_led_post_process_sat(status_leds[i].sat), 
+            uniform_status_led_post_process_val(status_leds[i].val), 
+            i);
+    }
+}
+
+// notify current mode of key event
+void uniform_key_event(uint16_t keycode, keyrecord_t *record) {
+    uniform_status_led_modes[uniform_status_leds_mode_index].key_event(keycode, record);
 }
 
 void uniform_increment_status_leds_mode(void) {

@@ -59,6 +59,7 @@ const uint16_t keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 };
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+  uniform_key_event(keycode, record);
   switch (keycode) {
 
       case KC_CAPS:

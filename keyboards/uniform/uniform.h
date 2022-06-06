@@ -26,6 +26,8 @@ void exec_bootloader(void);
 // status LED state information
 void uniform_increment_status_leds_mode(void);
 void uniform_decrement_status_leds_mode(void);
+void uniform_increase_status_leds_brightness(void);
+void uniform_decrease_status_leds_brightness(void);
 void uniform_flip_mod_state_caps(void);
 void uniform_set_mod_state_fn1(bool state);
 void uniform_set_mod_state_fn2(bool state);

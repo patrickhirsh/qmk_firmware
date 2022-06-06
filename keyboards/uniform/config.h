@@ -25,7 +25,6 @@
 #define RGB_DI_PIN A15
 #define RGBLED_NUM 3
 #define UNIFORM_STATUS_LED_TICKRATE 8               // ms (16 = 62.5 ticks/s, 8 = 125 ticks/s)
-#define UNIFORM_STATUS_LED_BRIGHTNESS 1.0f          // 0.0f - 1.0f
 #define WS2812_BYTE_ORDER WS2812_BYTE_ORDER_RGB
 
 /* Set 0 if debouncing isn't needed */

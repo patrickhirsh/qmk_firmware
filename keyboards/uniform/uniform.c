@@ -12,6 +12,58 @@
 
 
 // ======================================================================
+// Uniform EEPROM
+// ======================================================================
+//
+// uint32 (4-byte) KB EEPROM layout:
+// _______________________________________________________________________
+// | <unused2> | <unused1> | <status led brightness> | <status led mode> |
+// ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾
+
+static void uniform_eeprom_write_status_led_mode(uint8_t mode) {
+
+    // unpack    
+    uint32_t eeprom = eeconfig_read_kb();
+    //uint8_t unpacked_mode =             (eeprom >> 0) & 0xFF;
+    uint8_t unpacked_brightness =       (eeprom >> 8) & 0xFF;
+    uint8_t unpacked_unused1 =          (eeprom >> 16) & 0xFF;
+    uint8_t unpacked_unused2 =          (eeprom >> 24) & 0xFF;
+    
+    // pack
+    uint32_t packed_mode =              mode;
+    uint32_t packed_brightness =        unpacked_brightness << 8;
+    uint32_t packed_unused1 =           unpacked_unused1 << 16;
+    uint32_t packed_unused2 =           unpacked_unused2 << 24;
+    uint32_t payload =                  packed_unused2 | packed_unused1 | packed_brightness | packed_mode;
+    eeconfig_update_kb(payload);
+}
+
+static uint8_t uniform_eeprom_read_status_led_mode(void) {
+    return (eeconfig_read_kb() >> 0) & 0xFF;
+}
+
+static void uniform_eeprom_write_status_led_brightness(uint8_t brightness) {
+    // unpack    
+    uint32_t eeprom = eeconfig_read_kb();
+    uint8_t unpacked_mode =             (eeprom >> 0) & 0xFF;
+    //uint8_t unpacked_brightness =       (eeprom >> 8) & 0xFF;
+    uint8_t unpacked_unused1 =          (eeprom >> 16) & 0xFF;
+    uint8_t unpacked_unused2 =          (eeprom >> 24) & 0xFF;
+    
+    // pack
+    uint32_t packed_mode =              unpacked_mode;
+    uint32_t packed_brightness =        brightness << 8;
+    uint32_t packed_unused1 =           unpacked_unused1 << 16;
+    uint32_t packed_unused2 =           unpacked_unused2 << 24;
+    uint32_t payload =                  packed_unused2 | packed_unused1 | packed_brightness | packed_mode;
+    eeconfig_update_kb(payload);
+}
+
+static uint8_t uniform_eeprom_read_status_led_brightness(void) {
+    return (eeconfig_read_kb() >> 8) & 0xFF;
+}
+
+// ======================================================================
 // Status LEDs (State Info)
 // ======================================================================
 
@@ -23,7 +75,7 @@ typedef struct {
 
 static uniform_status_led_color status_leds[RGBLED_NUM];
 
-static float uniform_status_led_brightness;
+static uint8_t uniform_status_led_brightness;
 static bool uniform_mod_state_caps;
 static bool uniform_mod_state_fn1;
 static bool uniform_mod_state_fn2;
@@ -175,7 +227,7 @@ uint8_t uniform_status_led_post_process_val(uint8_t val) {
     if (uniform_mod_state_fn2 || pulse_str != 0) {
         
         const uint8_t fade_time = 50;       // time (in ticks) to fade in / out of the pulse effect
-        const float pulse_speed = 30.0f;    // lower value = faster pulse time
+        const float pulse_speed = 40.0f;    // lower value = faster pulse time
 
         // update pulse position
         pulse_pos++;
@@ -202,7 +254,7 @@ uint8_t uniform_status_led_post_process_val(uint8_t val) {
     }
 
     // apply final brightness post-processing
-    return (float)val * uniform_status_led_brightness;
+    return (float)val * ((float)uniform_status_led_brightness / 100.0f);
 }
 
 void uniform_increment_status_leds_mode(void) {
@@ -214,7 +266,7 @@ void uniform_increment_status_leds_mode(void) {
     uniform_status_led_modes[uniform_status_leds_mode_index].init();
 
     // update eeprom
-    eeconfig_update_kb(uniform_status_leds_mode_index);
+    uniform_eeprom_write_status_led_mode(uniform_status_leds_mode_index);
 }
 
 void uniform_decrement_status_leds_mode(void) {
@@ -228,21 +280,27 @@ void uniform_decrement_status_leds_mode(void) {
     uniform_status_led_modes[uniform_status_leds_mode_index].init();
 
     // update eeprom
-    eeconfig_update_kb(uniform_status_leds_mode_index);
+    uniform_eeprom_write_status_led_mode(uniform_status_leds_mode_index);
 }
 
 void uniform_increase_status_leds_brightness(void) {
-    uniform_status_led_brightness = uniform_status_led_brightness + .05f;
-    if (uniform_status_led_brightness > 1.0f) { 
-        uniform_status_led_brightness = 1.0f;
+    uniform_status_led_brightness = uniform_status_led_brightness + 5;
+    if (uniform_status_led_brightness > 100) { 
+        uniform_status_led_brightness = 100;
     }
+    // update eeprom
+    uniform_eeprom_write_status_led_brightness(uniform_status_led_brightness);
 }
 
 void uniform_decrease_status_leds_brightness(void) {
-    uniform_status_led_brightness = uniform_status_led_brightness - .05f;
-    if (uniform_status_led_brightness < 0.0f) { 
-        uniform_status_led_brightness = 0.0f;
+    if (uniform_status_led_brightness < 5) {
+        uniform_status_led_brightness = 0;
     }
+    else {
+        uniform_status_led_brightness = uniform_status_led_brightness - 5;
+    }
+    // update eeprom
+    uniform_eeprom_write_status_led_brightness(uniform_status_led_brightness);
 }
 
 void uniform_flip_mod_state_caps(void) {
@@ -266,7 +324,9 @@ void matrix_init_kb(void) {
     matrix_init_user();
     
     // status led brightness
-    uniform_status_led_brightness = UNIFORM_STATUS_LED_BRIGHTNESS > 1.0f || UNIFORM_STATUS_LED_BRIGHTNESS < 0.0f ? 1.0f : UNIFORM_STATUS_LED_BRIGHTNESS;
+    uniform_status_led_brightness = uniform_eeprom_read_status_led_brightness() % 5 != 0 || uniform_eeprom_read_status_led_brightness() > 100 ? 
+        100 : 
+        uniform_eeprom_read_status_led_brightness();
     
     // status led observed layer / modifier states
     uniform_mod_state_caps = false;
@@ -275,7 +335,7 @@ void matrix_init_kb(void) {
     
     // status led modes
     uniform_status_leds_mode_count = sizeof(uniform_status_led_modes) / sizeof(uniform_status_led_mode);
-    uniform_status_leds_mode_index = eeconfig_read_kb() > uniform_status_leds_mode_count - 1 ? 0 : eeconfig_read_kb();
+    uniform_status_leds_mode_index = uniform_eeprom_read_status_led_mode() > uniform_status_leds_mode_count - 1 ? 0 : uniform_eeprom_read_status_led_mode();
     uniform_status_led_modes[uniform_status_leds_mode_index].init();
 
     // defered executor for updating status LEDs

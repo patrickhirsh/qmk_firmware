@@ -21,34 +21,16 @@
 #define MATRIX_ROW_PINS { B4, B5, B7, C15, C14 }
 #define MATRIX_COL_PINS { A0, A1, A2, A3, A4, A5, A6, A7, B0, B1, A8, A9, A10, B6 }
 
-/* Status RGB LED */
+/* Status LEDs */
 #define RGB_DI_PIN A15
 #define RGBLED_NUM 3
 #define UNIFORM_STATUS_LED_TICKRATE 8               // ms (16 = 62.5 ticks/s, 8 = 125 ticks/s)
 #define WS2812_BYTE_ORDER WS2812_BYTE_ORDER_RGB
 
+/* Status LED Modes - tweak colors/animations in Uniform.c */
+#define UNIFORM_STATUS_LED_MODE_IMPERIAL
+#define UNIFORM_STATUS_LED_MODE_SORBET
+#define UNIFORM_STATUS_LED_MODE_RAINBOW
+
 /* Set 0 if debouncing isn't needed */
 #define DEBOUNCE 5
-
-/* ChibiOS hooks to reroute errors to QMK toolbox */
-#define chDbgCheck(c)                                                                                   \
-    do {                                                                                                \
-        if (CH_DBG_ENABLE_CHECKS != FALSE) {                                                            \
-            if (!(c)) {                                                                                 \
-                extern void chibi_debug_check_hook(const char* func, const char* condition, int value); \
-                chibi_debug_check_hook(__func__, (#c), (c));                                            \
-                chSysHalt(__func__);                                                                    \
-            }                                                                                           \
-        }                                                                                               \
-    } while (false)
-
-#define chDbgAssert(c, r)                                                                                                    \
-    do {                                                                                                                     \
-        if (CH_DBG_ENABLE_ASSERTS != FALSE) {                                                                                \
-            if (!(c)) {                                                                                                      \
-                extern void chibi_debug_assert_hook(const char* func, const char* condition, int value, const char* reason); \
-                chibi_debug_assert_hook(__func__, (#c), (c), (r));                                                           \
-                chSysHalt(__func__);                                                                                         \
-            }                                                                                                                \
-        }                                                                                                                    \
-    } while (false)

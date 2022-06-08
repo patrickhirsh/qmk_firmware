@@ -122,11 +122,85 @@ static uint8_t uniform_sinusoidal_interpolation(
 
 
 // ======================================================================
-// Mode: Sorbet
+// Mode: Imperial
 // ======================================================================
+#ifdef UNIFORM_STATUS_LED_MODE_IMPERIAL
+
+static const uint8_t    imperial_primary_hue = 0;
 
 // trace effect
-static const float      sorbet_trace_falloff_scalar = 1.5f;     // distance the light spreads from the trace point
+static const float      imperial_trace_falloff_scalar = 0.6f;     // value to scale the perceived trace light emission falloff by (larger value = stronger falloff)
+static const float      imperial_trace_degredation_rate = 0.07f;  // rate to degrade trace position every tick when the mod key isn't held
+static const float      imperial_trace_speed = 8;                 // sin input (ticks) is scaled by this value to determine position (smaller value = faster)
+static const float      imperial_led0_pos = -1.0;                 // led position relative to the center of the LED cluster
+static const float      imperial_led1_pos = 0;                    // led position relative to the center of the LED cluster
+static const float      imperial_led2_pos = 1.0;                  // led position relative to the center of the LED cluster
+static float            imperial_trace_sinusoidal_x;              // imperial_trace_sinusoidal_x = arcsin(imperial_trace_xpos) * imperial_trace_speed
+static float            imperial_trace_xpos;                      // imperial_trace_xpos = sin(imperial_trace_sinusoidal_x / imperial_trace_speed)
+
+static void uniform_init_status_leds_imperial(void) {
+    status_leds[0] = (uniform_status_led_color) { imperial_primary_hue, 255, 0 };
+    status_leds[1] = (uniform_status_led_color) { imperial_primary_hue, 255, 0 };
+    status_leds[2] = (uniform_status_led_color) { imperial_primary_hue, 255, 0 };
+}
+
+static void uniform_update_status_leds_imperial(void) { 
+
+    // fn1 trace effect
+    if (uniform_mod_state_fn1) {
+        // advance along the dinusoidal path
+        imperial_trace_sinusoidal_x = imperial_trace_sinusoidal_x + 1.0f;
+        if ((float)imperial_trace_sinusoidal_x / imperial_trace_speed > 2 * M_PI) {
+            imperial_trace_sinusoidal_x = 0;
+        }
+        imperial_trace_xpos = sin(imperial_trace_sinusoidal_x / imperial_trace_speed);
+    }
+    else {
+        // if mod key isn't held, break from sinusodial path and linearly decrement actual imperial_trace_xpos until we reach rest
+        imperial_trace_xpos = imperial_trace_xpos + imperial_trace_degredation_rate > 1.0f ? 1.0f : imperial_trace_xpos + imperial_trace_degredation_rate;
+
+        // continuously rebase sinusoidal position as we do this
+        imperial_trace_sinusoidal_x = asin(imperial_trace_xpos) * imperial_trace_speed;
+    }
+
+
+    // led distance from trace (considering falloff)
+    float led0_scaled_dist = imperial_trace_falloff_scalar * fabs(imperial_led0_pos - imperial_trace_xpos);
+    float led1_scaled_dist = imperial_trace_falloff_scalar * fabs(imperial_led1_pos - imperial_trace_xpos);
+    float led2_scaled_dist = imperial_trace_falloff_scalar * fabs(imperial_led2_pos - imperial_trace_xpos);
+
+    // determine effect intensity scalar (0.0f-1.0f)
+    float led0_scale = 1.0f - led0_scaled_dist < 0 ? 0 : 1.0f - led0_scaled_dist;
+    float led1_scale = 1.0f - led1_scaled_dist < 0 ? 0 : 1.0f - led1_scaled_dist;
+    float led2_scale = 1.0f - led2_scaled_dist < 0 ? 0 : 1.0f - led2_scaled_dist;
+
+    // apply resulting values to create trace effect
+    status_leds[0].val = 255.0f * led0_scale;
+    status_leds[1].val = 255.0f * led1_scale;
+    status_leds[2].val = 255.0f * led2_scale;
+}
+
+static void uniform_imperial_keypress_handle(uint16_t keycode, keyrecord_t *record) {
+
+}
+#endif // UNIFORM_STATUS_LED_MODE_IMPERIAL
+
+
+// ======================================================================
+// Mode: Sorbet
+// ======================================================================
+#ifdef UNIFORM_STATUS_LED_MODE_SORBET
+
+// color palette
+static const uint8_t    sorbet_led0_hue = 235;                  
+static const uint8_t    sorbet_led1_hue = 15;                   
+static const uint8_t    sorbet_led2_hue = 5;                    
+static const int        sorbet_led0_hue_shifted = 170;          
+static const int        sorbet_led1_hue_shifted = 115;          
+static const int        sorbet_led2_hue_shifted = 85;
+
+// trace effect
+static const float      sorbet_trace_falloff_scalar = 1.5f;     // value to scale the perceived trace light emission falloff by (larger value = stronger falloff)
 static const float      sorbet_trace_speed = 35;                // sin input (ticks) is scaled by this value to determine position (smaller value = faster)
 static const uint8_t    sorbet_trace_fade_time = 50;            // time (in ticks) to fade in / out of the effect
 static const uint8_t    sorbet_trace_rest_pos = 75;             // should be a value between 0 and 2 * M_PI * sorbet_trace_speed (period of oscillation). trace will start here
@@ -136,16 +210,9 @@ static const float      sorbet_led2_pos = 0.5;                  // led position 
 static uint16_t         sorbet_trace_pos;
 static uint8_t          sorbet_trace_str;
 
-// hue shift effect
-static const uint8_t    sorbet_led0_hue = 235;                  // led0 base hue
-static const uint8_t    sorbet_led1_hue = 15;                   // led1 base hue
-static const uint8_t    sorbet_led2_hue = 5;                    // led2 base hue
-static const int        sorbet_led0_hue_shifted = 170;          // led0 hue shifted
-static const int        sorbet_led1_hue_shifted = 115;          // led1 hue shifted
-static const int        sorbet_led2_hue_shifted = 85;           // led2 hue shifted
+// hue shift effect           
 static const uint8_t    sorbet_hue_shift_transition_time = 70;  // time (in ticks) to fade in / out of the effect
 static uint8_t          sorbet_hue_shift_str;
-
 
 static void uniform_init_status_leds_sorbet(void) {         
     sorbet_trace_pos = sorbet_trace_rest_pos;
@@ -210,16 +277,18 @@ static void uniform_update_status_leds_sorbet(void) {
         status_leds[1].sat = 255 - (sorbet_trace_str / (float)sorbet_trace_fade_time) * 255.0f * led1_scale;
         status_leds[2].sat = 255 - (sorbet_trace_str / (float)sorbet_trace_fade_time) * 255.0f * led2_scale;
     }
-}
+}               
 
 static void uniform_sorbet_keypress_handle(uint16_t keycode, keyrecord_t *record) {
     
 }
+#endif // UNIFORM_STATUS_LED_MODE_SORBET
 
 
 // ======================================================================
 // Mode: Rainbow
 // ======================================================================
+#ifdef UNIFORM_STATUS_LED_MODE_RAINBOW
 
 static void uniform_init_status_leds_rainbow(void) {
     status_leds[0] = (uniform_status_led_color) { 0, 255, 255 };
@@ -236,6 +305,7 @@ static void uniform_update_status_leds_rainbow(void) {
 static void uniform_rainbow_keypress_handle(uint16_t keycode, keyrecord_t *record) {
 
 }
+#endif // UNIFORM_STATUS_LED_MODE_RAINBOW
 
 
 // ======================================================================
@@ -250,6 +320,7 @@ typedef struct {
 
 // master array of status led modes
 static uniform_status_led_mode uniform_status_led_modes[] = {
+    (uniform_status_led_mode) { uniform_init_status_leds_imperial, uniform_update_status_leds_imperial, uniform_imperial_keypress_handle },
     (uniform_status_led_mode) { uniform_init_status_leds_sorbet, uniform_update_status_leds_sorbet, uniform_sorbet_keypress_handle },
     (uniform_status_led_mode) { uniform_init_status_leds_rainbow, uniform_update_status_leds_rainbow, uniform_rainbow_keypress_handle }
 };

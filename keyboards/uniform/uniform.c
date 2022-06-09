@@ -122,6 +122,71 @@ static uint8_t uniform_sinusoidal_interpolation(
 
 
 // ======================================================================
+// Mode: nightrider
+// ======================================================================
+#ifdef UNIFORM_STATUS_LED_MODE_NIGHTRIDER
+
+static const uint8_t    nightrider_primary_hue = 0;
+
+// trace effect
+static const float      nightrider_trace_falloff_scalar = 0.6f;     // value to scale the perceived trace light emission falloff by (larger value = stronger falloff)
+static const float      nightrider_trace_degredation_rate = 0.07f;  // rate to degrade trace position every tick when the mod key isn't held
+static const float      nightrider_trace_speed = 10;                // sin input (ticks) is scaled by this value to determine position (smaller value = faster)
+static const float      nightrider_led0_pos = -1.0;                 // led position relative to the center of the LED cluster
+static const float      nightrider_led1_pos = 0;                    // led position relative to the center of the LED cluster
+static const float      nightrider_led2_pos = 1.0;                  // led position relative to the center of the LED cluster
+static float            nightrider_trace_sinusoidal_x;              // nightrider_trace_sinusoidal_x = arcsin(nightrider_trace_xpos) * nightrider_trace_speed
+static float            nightrider_trace_xpos;                      // nightrider_trace_xpos = sin(nightrider_trace_sinusoidal_x / nightrider_trace_speed)
+
+static void uniform_init_status_leds_nightrider(void) {
+    status_leds[0] = (uniform_status_led_color) { nightrider_primary_hue, 255, 0 };
+    status_leds[1] = (uniform_status_led_color) { nightrider_primary_hue, 255, 0 };
+    status_leds[2] = (uniform_status_led_color) { nightrider_primary_hue, 255, 0 };
+}
+
+static void uniform_update_status_leds_nightrider(void) { 
+
+    // fn1 trace effect
+    if (uniform_mod_state_fn1) {
+        // advance along the dinusoidal path
+        nightrider_trace_sinusoidal_x = nightrider_trace_sinusoidal_x + 1.0f;
+        if ((float)nightrider_trace_sinusoidal_x / nightrider_trace_speed > 2 * M_PI) {
+            nightrider_trace_sinusoidal_x = 0;
+        }
+        nightrider_trace_xpos = sin(nightrider_trace_sinusoidal_x / nightrider_trace_speed);
+    }
+    else {
+        // if mod key isn't held, break from sinusodial path and linearly decrement actual nightrider_trace_xpos until we reach rest
+        nightrider_trace_xpos = nightrider_trace_xpos + nightrider_trace_degredation_rate > 1.0f ? 1.0f : nightrider_trace_xpos + nightrider_trace_degredation_rate;
+
+        // continuously rebase sinusoidal position as we do this
+        nightrider_trace_sinusoidal_x = asin(nightrider_trace_xpos) * nightrider_trace_speed;
+    }
+
+
+    // led distance from trace (considering falloff)
+    float led0_scaled_dist = nightrider_trace_falloff_scalar * fabs(nightrider_led0_pos - nightrider_trace_xpos);
+    float led1_scaled_dist = nightrider_trace_falloff_scalar * fabs(nightrider_led1_pos - nightrider_trace_xpos);
+    float led2_scaled_dist = nightrider_trace_falloff_scalar * fabs(nightrider_led2_pos - nightrider_trace_xpos);
+
+    // determine effect intensity scalar (0.0f-1.0f)
+    float led0_scale = 1.0f - led0_scaled_dist < 0 ? 0 : 1.0f - led0_scaled_dist;
+    float led1_scale = 1.0f - led1_scaled_dist < 0 ? 0 : 1.0f - led1_scaled_dist;
+    float led2_scale = 1.0f - led2_scaled_dist < 0 ? 0 : 1.0f - led2_scaled_dist;
+
+    // apply resulting values to create trace effect
+    status_leds[0].val = 255.0f * led0_scale;
+    status_leds[1].val = 255.0f * led1_scale;
+    status_leds[2].val = 255.0f * led2_scale;
+}
+
+static void uniform_nightrider_keypress_handle(uint16_t keycode, keyrecord_t *record) {
+
+}
+#endif // UNIFORM_STATUS_LED_MODE_NIGHTRIDER
+
+
+// ======================================================================
 // Mode: Imperial
 // ======================================================================
 #ifdef UNIFORM_STATUS_LED_MODE_IMPERIAL
@@ -130,13 +195,11 @@ static const uint8_t    imperial_primary_hue = 0;
 
 // trace effect
 static const float      imperial_trace_falloff_scalar = 0.6f;     // value to scale the perceived trace light emission falloff by (larger value = stronger falloff)
-static const float      imperial_trace_degredation_rate = 0.07f;  // rate to degrade trace position every tick when the mod key isn't held
-static const float      imperial_trace_speed = 8;                 // sin input (ticks) is scaled by this value to determine position (smaller value = faster)
-static const float      imperial_led0_pos = -1.0;                 // led position relative to the center of the LED cluster
-static const float      imperial_led1_pos = 0;                    // led position relative to the center of the LED cluster
-static const float      imperial_led2_pos = 1.0;                  // led position relative to the center of the LED cluster
-static float            imperial_trace_sinusoidal_x;              // imperial_trace_sinusoidal_x = arcsin(imperial_trace_xpos) * imperial_trace_speed
-static float            imperial_trace_xpos;                      // imperial_trace_xpos = sin(imperial_trace_sinusoidal_x / imperial_trace_speed)
+static const float      imperial_trace_speed = 10;                // sin input (ticks) is scaled by this value to determine position (smaller value = faster)
+static const float      imperial_led0_pos = 0.0;                    
+static const float      imperial_led1_pos = 1.0;                    
+static const float      imperial_led2_pos = 2.0;                  
+static int              imperial_trace_sinusoidal_pos;
 
 static void uniform_init_status_leds_imperial(void) {
     status_leds[0] = (uniform_status_led_color) { imperial_primary_hue, 255, 0 };
@@ -144,30 +207,22 @@ static void uniform_init_status_leds_imperial(void) {
     status_leds[2] = (uniform_status_led_color) { imperial_primary_hue, 255, 0 };
 }
 
-static void uniform_update_status_leds_imperial(void) { 
+static void uniform_update_status_leds_imperial(void) {
 
     // fn1 trace effect
-    if (uniform_mod_state_fn1) {
-        // advance along the dinusoidal path
-        imperial_trace_sinusoidal_x = imperial_trace_sinusoidal_x + 1.0f;
-        if ((float)imperial_trace_sinusoidal_x / imperial_trace_speed > 2 * M_PI) {
-            imperial_trace_sinusoidal_x = 0;
+    float trace_absolute_pos = 2.0f;
+    if (imperial_trace_sinusoidal_pos > 0) {
+        imperial_trace_sinusoidal_pos++;
+        if ((float)imperial_trace_sinusoidal_pos / imperial_trace_speed > M_PI) {
+            imperial_trace_sinusoidal_pos = 0;
         }
-        imperial_trace_xpos = sin(imperial_trace_sinusoidal_x / imperial_trace_speed);
+        trace_absolute_pos = 2.0f - sin(imperial_trace_sinusoidal_pos / imperial_trace_speed) * 2.0f;
     }
-    else {
-        // if mod key isn't held, break from sinusodial path and linearly decrement actual imperial_trace_xpos until we reach rest
-        imperial_trace_xpos = imperial_trace_xpos + imperial_trace_degredation_rate > 1.0f ? 1.0f : imperial_trace_xpos + imperial_trace_degredation_rate;
-
-        // continuously rebase sinusoidal position as we do this
-        imperial_trace_sinusoidal_x = asin(imperial_trace_xpos) * imperial_trace_speed;
-    }
-
 
     // led distance from trace (considering falloff)
-    float led0_scaled_dist = imperial_trace_falloff_scalar * fabs(imperial_led0_pos - imperial_trace_xpos);
-    float led1_scaled_dist = imperial_trace_falloff_scalar * fabs(imperial_led1_pos - imperial_trace_xpos);
-    float led2_scaled_dist = imperial_trace_falloff_scalar * fabs(imperial_led2_pos - imperial_trace_xpos);
+    float led0_scaled_dist = imperial_trace_falloff_scalar * fabs(imperial_led0_pos - trace_absolute_pos);
+    float led1_scaled_dist = imperial_trace_falloff_scalar * fabs(imperial_led1_pos - trace_absolute_pos);
+    float led2_scaled_dist = imperial_trace_falloff_scalar * fabs(imperial_led2_pos - trace_absolute_pos);
 
     // determine effect intensity scalar (0.0f-1.0f)
     float led0_scale = 1.0f - led0_scaled_dist < 0 ? 0 : 1.0f - led0_scaled_dist;
@@ -181,9 +236,17 @@ static void uniform_update_status_leds_imperial(void) {
 }
 
 static void uniform_imperial_keypress_handle(uint16_t keycode, keyrecord_t *record) {
-
+    if (record->event.pressed) {
+        if ((float)imperial_trace_sinusoidal_pos / imperial_trace_speed > 0.5f * M_PI) {
+            imperial_trace_sinusoidal_pos = (0.5f * M_PI - ((imperial_trace_sinusoidal_pos / imperial_trace_speed) - 0.5f * M_PI)) * imperial_trace_speed;
+        }
+        else {
+            imperial_trace_sinusoidal_pos++;
+        }
+    }
 }
 #endif // UNIFORM_STATUS_LED_MODE_IMPERIAL
+
 
 
 // ======================================================================
@@ -320,9 +383,18 @@ typedef struct {
 
 // master array of status led modes
 static uniform_status_led_mode uniform_status_led_modes[] = {
+#ifdef UNIFORM_STATUS_LED_MODE_NIGHTRIDER
+    (uniform_status_led_mode) { uniform_init_status_leds_nightrider, uniform_update_status_leds_nightrider, uniform_nightrider_keypress_handle },
+#endif
+#ifdef UNIFORM_STATUS_LED_MODE_IMPERIAL
     (uniform_status_led_mode) { uniform_init_status_leds_imperial, uniform_update_status_leds_imperial, uniform_imperial_keypress_handle },
+#endif
+#ifdef UNIFORM_STATUS_LED_MODE_SORBET
     (uniform_status_led_mode) { uniform_init_status_leds_sorbet, uniform_update_status_leds_sorbet, uniform_sorbet_keypress_handle },
-    (uniform_status_led_mode) { uniform_init_status_leds_rainbow, uniform_update_status_leds_rainbow, uniform_rainbow_keypress_handle }
+#endif
+#ifdef UNIFORM_STATUS_LED_MODE_RAINBOW
+    (uniform_status_led_mode) { uniform_init_status_leds_rainbow, uniform_update_status_leds_rainbow, uniform_rainbow_keypress_handle },
+#endif
 };
 static uint8_t uniform_status_leds_mode_count;
 static uint8_t uniform_status_leds_mode_index;
